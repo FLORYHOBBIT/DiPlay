@@ -35,6 +35,7 @@ object AppLocale {
     private const val KEY_MIGRATED = "app_language_platform_migrated"
 
     fun preference(context: Context): String {
+        if (AionIntegration.enabled(context)) return SIMPLIFIED_CHINESE
         if (Build.VERSION.SDK_INT >= 33) {
             val locales = context.getSystemService(LocaleManager::class.java).applicationLocales
             if (locales.isEmpty) return SYSTEM

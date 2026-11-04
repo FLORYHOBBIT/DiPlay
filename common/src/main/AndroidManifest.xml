@@ -190,6 +190,22 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/usb_auto_confirm_service_config" />
         </service>
+
+        <activity android:name="com.shilapi.xcertplay.aion.MainActivity" android:enabled="@bool/aion_edition" android:exported="false" />
+        <activity android:name="com.shilapi.xcertplay.aion.BluetoothMediaActivity" android:enabled="@bool/aion_edition" android:exported="false" />
+        <activity android:name="com.shilapi.xcertplay.aion.MusicClusterActivity" android:enabled="@bool/aion_edition" android:exported="false" />
+        <activity android:name="com.shilapi.xcertplay.aion.InstrumentMapActivity" android:enabled="@bool/aion_edition" android:exported="false" />
+        <service android:name="com.shilapi.xcertplay.aion.BluetoothPolicyService" android:enabled="@bool/aion_edition" android:exported="false" android:foregroundServiceType="connectedDevice" />
+        <receiver android:name="com.shilapi.xcertplay.aion.AionBluetoothReceiver" android:enabled="@bool/aion_edition" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+        <provider android:name="com.shilapi.xcertplay.aion.InstrumentArtworkProvider"
+            android:authorities="${applicationId}.instrument-art" android:exported="false" android:grantUriPermissions="true" />
     </application>
 
 </manifest>

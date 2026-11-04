@@ -7,8 +7,8 @@
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/ic_carplay"
-        android:label="@string/app_name"
-        android:localeConfig="@xml/locales_config"
+        android:label="DiPlay 埃安"
+
         android:roundIcon="@drawable/ic_carplay"
         android:supportsRtl="true"
         android:resizeableActivity="true"
@@ -18,27 +18,36 @@
             android:name="android.allow_multiple_resumed_activities"
             android:value="true" />
 
-        <!-- Based on the split-screen metadata declared by DiLink system apps. -->
-        <meta-data
-            android:name="BYD_SUPPORT_SPLIT_ACTIVITY"
-            android:value="1" />
-
         <receiver
             android:name="com.shilapi.xcertplay.BootReceiver"
-            android:enabled="true"
+            android:enabled="false"
             tools:replace="android:enabled" />
 
         <receiver
             android:name="com.shilapi.xcertplay.PhoneBluetoothReceiver"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
             </intent-filter>
         </receiver>
 
+        <activity android:name="com.shilapi.xcertplay.AdbClusterActivity" tools:node="remove" />
+        <activity android:name="com.shilapi.xcertplay.CarPlayVideoActivity" tools:node="remove" />
+        <service android:name="com.shilapi.xcertplay.MapEmbedService" tools:node="remove" />
+        <receiver android:name="com.shilapi.xcertplay.NavigationWidget" tools:node="remove" />
+        <service android:name="com.shilapi.xcertplay.WheelKeyService" tools:node="remove" />
         <service android:name="com.shilapi.xcertplay.shared.MyCarAppService" tools:node="remove" />
         <meta-data android:name="androidx.car.app.minCarApiLevel" tools:node="remove" />
+
+        <!-- AION has no scheduled updater or downloadable emoji font. Keep lifecycle startup only. -->
+        <provider android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup" android:exported="false" tools:node="merge">
+            <meta-data android:name="androidx.work.WorkManagerInitializer" tools:node="remove" />
+            <meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer" tools:node="remove" />
+            <!-- Baseline profile installation is API 28+, beyond this head unit's API 27. -->
+            <meta-data android:name="androidx.profileinstaller.ProfileInstallerInitializer" tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <bool name="aion_edition">true</bool>
+    <string name="aion_bluetooth" translatable="false">埃安蓝牙与自启动</string>
+    <string name="aion_bluetooth_description" translatable="false">选择 iPhone，管理同步媒体和同步通话；手机蓝牙连接后自动启动 DiPlay。无需另装车机助手。</string>
+    <string name="aion_bluetooth_open" translatable="false">蓝牙与自启动 · 设置</string>
+    <string name="aion_music" translatable="false">埃安仪表歌曲（实验性）</string>
+    <string name="aion_music_description" translatable="false">将 DiPlay 的歌名、歌词和封面同步到原车仪表，使用当前 CarPlay 的歌曲数据。</string>
+    <string name="aion_music_open" translatable="false">仪表歌曲 · 设置</string>
+    <string name="aion_map" translatable="false">埃安仪表地图（实验性）</string>
+    <string name="aion_map_description" translatable="false">CarPlay 地图直接显示在仪表，地图流或连接结束后恢复原车画面。启用或停用后需重新连接 CarPlay。</string>
+    <string name="aion_map_open" translatable="false">仪表地图 · 设置</string>
+    <string name="aion_permissions_open" translatable="false">权限管理 · 系统授权与本机 ADB</string>
+</resources>

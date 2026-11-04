@@ -180,6 +180,9 @@ internal class AudioFocusCoordinator(
  * media and navigation guidance stay independently routable. Call [close]
  * when the session tears down.
  */
+internal fun shouldUseMediaClockTrim(channel: AudioChannel, enabled: Boolean): Boolean =
+    channel == AudioChannel.MEDIA && enabled
+
 class AndroidMediaSink(
     surface: Surface? = null,
     private val videoWidth: Int = 1280,
@@ -195,6 +198,8 @@ class AndroidMediaSink(
     private val navigationStreamType: Int = AudioChannelMapper.DEFAULT_NAVIGATION_STREAM_TYPE,
     onScreenStreamActiveChanged: ((Int, Boolean) -> Unit)? = null,
     private val mediaBufferMillis: Int = MediaAudioBuffer.DEFAULT_MILLIS,
+    /** Disable adaptive playback-rate changes on head units with unstable AudioTrack clocks. */
+    private val mediaClockTrimEnabled: Boolean = true,
     private val onAudioDiagnostic: (String) -> Unit = {},
     /** True while any music ("media") audio stream is running; called from media threads. */
     private val onMediaAudioChanged: (Boolean) -> Unit = {},
@@ -744,6 +749,7 @@ class AndroidMediaSink(
             audioFocusCoordinator,
             navigationStreamType,
             mediaBufferMillis,
+            mediaClockTrimEnabled,
             onAudioDiagnostic,
             ambientSinkToken,
             speakerphoneCall = format.audioType == "telephony" &&
@@ -1765,6 +1771,7 @@ private class AudioRenderer(
     private val audioFocusCoordinator: AudioFocusCoordinator,
     private val navigationStreamType: Int,
     private val mediaBufferMillis: Int,
+    private val mediaClockTrimEnabled: Boolean,
     private val report: (String) -> Unit,
     private val ambientSinkToken: Long,
     private val speakerphoneCall: Boolean = false,
@@ -1902,7 +1909,8 @@ private class AudioRenderer(
             runCatching { report("Audio: starting api=${Build.VERSION.SDK_INT} " +
                 "audioType=${format.audioType} codec=${format.codec} rate=${format.sampleRate} channels=${format.channels} " +
                 "mapping=${if (advancedAudioChannelMapping) "automotive" else "mobile"} " +
-                "mediaChannel=$mediaChannel navigationChannel=$navigationChannel focus=$audioFocusEnabled") }
+                "mediaChannel=$mediaChannel navigationChannel=$navigationChannel focus=$audioFocusEnabled " +
+                "mediaClockTrim=$mediaClockTrimEnabled") }
             when (format.codec) {
                 AudioCodecKind.AAC_LC -> configureCodec(MediaFormat.MIMETYPE_AUDIO_AAC)
                 AudioCodecKind.OPUS -> configureCodec(MediaFormat.MIMETYPE_AUDIO_OPUS)
@@ -2064,8 +2072,10 @@ private class AudioRenderer(
         val capacityBytes = built.bufferSizeInFrames * frameBytes
         startThresholdBytes = MediaAudioBuffer.startBytesFor(plan.startBytes, capacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
         // Only music plays long enough for the clocks to drift apart; calls keep their echo reference exact.
-        clockTrim = if (mappedChannel == AudioChannel.MEDIA) MediaClockTrim(format.sampleRate, (startThresholdBytes / frameBytes).toLong(),
-            measuresTarget = true) else null
+        // Some Android 8.1 automotive AudioTrack implementations sound pitch-shifted when this rate is adjusted.
+        clockTrim = if (mappedChannel?.let { shouldUseMediaClockTrim(it, mediaClockTrimEnabled) } == true) {
+            MediaClockTrim(format.sampleRate, (startThresholdBytes / frameBytes).toLong(), measuresTarget = true)
+        } else null
         val trackMetadata = runCatching {
             "api=${Build.VERSION.SDK_INT} trackState=${built.state} trackRate=${built.sampleRate} " +
                 "usage=${trackAttributes?.usage} contentType=${trackAttributes?.contentType} " +

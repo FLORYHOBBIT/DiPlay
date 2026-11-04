@@ -251,6 +251,7 @@ internal class ClusterMapPresentation(
         fun findDisplay(context: Context, theme: DiLink51ClusterLayout.Theme = DiLink51ClusterLayout.theme(context)): Display? {
             val displays = context.getSystemService(DisplayManager::class.java)
                 ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION) ?: return null
+            if (AionIntegration.enabled(context)) return null // AION uses the physical display directly.
             val name = DiLink51ClusterLayout.displayName(
                 displays.map { it.name }, android.os.Build.FINGERPRINT, theme,
             )

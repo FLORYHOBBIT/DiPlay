@@ -10,3 +10,25 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# This mobile product is the AION edition. Fold product branches before code/resource shrinking.
+# Actual SDK/model/firmware checks remain intact.
+-assumevalues class com.shilapi.xcertplay.AionIntegration {
+    public static boolean enabled(android.content.Context) return true;
+}
+-assumevalues class com.shilapi.xcertplay.orchestration.VendorFeatures {
+    public static boolean enabled(android.content.Context) return false;
+}
+
+# Shell entry points are named dynamically via Class.getName(); preserve main, not unused tools.
+-keepclassmembers,allowoptimization class com.shilapi.xcertplay.** {
+    public static void main(java.lang.String[]);
+}
+
+# Native methods use exported JNI names. The default Android rules also preserve their classes.
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+-keep class com.shilapi.xcertplay.transport.LinuxI2cNativeException {
+    <init>(int, java.lang.String);
+}

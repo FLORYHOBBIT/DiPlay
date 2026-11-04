@@ -1,0 +1,3 @@
+<resources>
+    <bool name="config_vendor_vehicle_features">true</bool>
+</resources>

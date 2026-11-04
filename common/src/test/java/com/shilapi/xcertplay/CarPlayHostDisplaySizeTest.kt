@@ -80,6 +80,31 @@ class CarPlayHostDisplaySizeTest {
         controllerConstruction.close()
     }
 
+    @Test fun aionInitialLayoutDoesNotWaitForTheResizeDebounce() {
+        org.mockito.Mockito.mockStatic(AionIntegration::class.java, org.mockito.stubbing.Answer { call ->
+            if (call.method.name == "enabled") true else call.callRealMethod()
+        }).use {
+            setField("activeDisplaySize", null)
+            activity.javaClass.getDeclaredMethod("scheduleDisplaySize", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                .apply { isAccessible = true }.invoke(activity, 1920, 990)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(size(1920, 990), getField("activeDisplaySize"))
+            assertNull(getField("pendingDisplaySize"))
+        }
+    }
+
+    @Test fun aionSubsequentResizeStillWaitsToAvoidRepeatedReconnects() {
+        org.mockito.Mockito.mockStatic(AionIntegration::class.java, org.mockito.stubbing.Answer { call ->
+            if (call.method.name == "enabled") true else call.callRealMethod()
+        }).use {
+            activity.javaClass.getDeclaredMethod("scheduleDisplaySize", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                .apply { isAccessible = true }.invoke(activity, 1000, 780)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(499))
+            assertEquals(size(1920, 990), getField("activeDisplaySize"))
+            assertEquals(size(1000, 780), getField("pendingDisplaySize"))
+        }
+    }
+
     @Test fun surroundViewOpenAndCloseKeepsTheNegotiatedCanvas() {
         val display = startSession()
         applySize(1920, 942)

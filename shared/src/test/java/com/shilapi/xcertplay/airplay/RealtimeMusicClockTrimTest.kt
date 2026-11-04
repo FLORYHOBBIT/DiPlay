@@ -115,8 +115,8 @@ class RealtimeMusicClockTrimTest {
             MediaClockTrim.learnedTrim = learned
             HeadUnitTrack.capacityFrames = MediaAudioBuffer.plan(true, 48_000, 2, MIN_BUFFER_BYTES, startMs).trackBufferBytes / 4
             val format = AudioFormat(AudioCodecKind.LPCM, 48_000, 2, AudioChannelMapper.STREAM_TYPE_MAIN_HIGH_AUDIO, "media")
-            renderer = type.declaredConstructors.single { it.parameterCount == 13 }.apply { isAccessible = true }
-                .newInstance(format, false, false, 0, 0, AudioFocusCoordinator(null, false), 0, startMs,
+            renderer = type.declaredConstructors.single { it.parameterCount == 14 }.apply { isAccessible = true }
+                .newInstance(format, false, false, 0, 0, AudioFocusCoordinator(null, false), 0, startMs, true,
                     { line: String -> reports += line }, 0L, false, null, false)
             field("started").set(renderer, true)
             method("createTrack").invoke(renderer)

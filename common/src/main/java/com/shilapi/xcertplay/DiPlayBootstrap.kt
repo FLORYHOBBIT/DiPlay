@@ -68,6 +68,7 @@ internal object DiPlayPreferences {
     fun phoneName(context: Context): String = prefs(context).getString("phone_name", null) ?: "Your iPhone"
     fun savePhone(context: Context, address: String, name: String) {
         prefs(context).edit().putString("phone_address", address).putString("phone_name", name).apply()
+        AionIntegration.phoneSaved(context, address, name)
     }
     fun defaultConnectionMode(context: Context) =
         DefaultConnectionMode.fromKey(prefs(context).getString("default_connection_mode", null))

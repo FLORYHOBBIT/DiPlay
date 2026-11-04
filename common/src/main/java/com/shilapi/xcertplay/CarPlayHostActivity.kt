@@ -208,9 +208,9 @@ open class CarPlayHostActivity : ComponentActivity() {
             hardwareVersion = "1.0",
             carPlayUsbInterfaceNumber = 3,
             locationInformationEnabled = locationReportingEnabled,
-            vehicleStatusEnabled = com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this),
-            chargingConnectors = com.shilapi.xcertplay.hud.BydOutputSettings.chargingConnectors(this),
-            vehicleSpeedEnabled = locationReportingEnabled &&
+            vehicleStatusEnabled = !AionIntegration.enabled(this) && com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this),
+            chargingConnectors = if (AionIntegration.enabled(this)) com.shilapi.xcertplay.transport.EvChargingConnectors.GB_T else com.shilapi.xcertplay.hud.BydOutputSettings.chargingConnectors(this),
+            vehicleSpeedEnabled = !AionIntegration.enabled(this) && locationReportingEnabled &&
                 (com.shilapi.xcertplay.hud.BydOutputSettings.wheelSpeedToIphoneActive(this) || EcarxWheelSpeed.present()),
         ),
         label = "DiPlay",
@@ -462,6 +462,8 @@ open class CarPlayHostActivity : ComponentActivity() {
     )
     private val currentSurface: Surface? get() = videoSurfaceOwner.current
     private var currentSurfaceTexture: SurfaceTexture? = null
+    private var aionInstrumentMap: com.shilapi.xcertplay.aion.AionInstrumentMap? = null
+    private val aionMapChanged: () -> Unit = { ensureClusterPresentation() }
     private var clusterPresentation: ClusterMapPresentation? = null
     private var clusterSurface: Surface? = null
     private var clusterMonitor: DiLink51ClusterMonitor? = null
@@ -861,11 +863,17 @@ open class CarPlayHostActivity : ComponentActivity() {
         } else {
             registerReceiver(bluetoothOnReceiver, bluetoothState)
         }
-        NavigationWidgetUpdater.attach(applicationContext)
-        CarPlayCallKeys.install(applicationContext)
-        CenterMapOverlay.requestShow = ::showCenterMap
-        MapMirrors.sink = mirrorSink
-        MapMirrors.onChanged = mirrorsChanged
+        if (AionIntegration.enabled(this)) {
+            com.shilapi.xcertplay.aion.AionMapSettings.onChanged = aionMapChanged
+            com.shilapi.xcertplay.aion.AionStartupTrace.stage(this, "host")
+        }
+        if (!AionIntegration.enabled(this)) {
+            NavigationWidgetUpdater.attach(applicationContext)
+            CarPlayCallKeys.install(applicationContext)
+            CenterMapOverlay.requestShow = ::showCenterMap
+            MapMirrors.sink = mirrorSink
+            MapMirrors.onChanged = mirrorsChanged
+        }
         languagePreferenceAtCreate = AppLocale.preference(this)
         if (isIphoneUsbAttachment(intent)) {
             AirPlayPersistence.saveWirelessEnabled(this, false)
@@ -1193,9 +1201,11 @@ open class CarPlayHostActivity : ComponentActivity() {
         logThemeState(ThemeModeDiagnostics.Source.START, resources.configuration)
         mainHandler.removeCallbacks(pollConfiguration)
         mainHandler.post(pollConfiguration)
-        CenterMapOverlay.onDiPlayScreenShown()
-        LauncherBubble.attach(this)
-        LauncherBubble.onAppScreenShown()
+        if (!AionIntegration.enabled(this)) {
+            CenterMapOverlay.onDiPlayScreenShown()
+            LauncherBubble.attach(this)
+            LauncherBubble.onAppScreenShown()
+        }
         homeMonitor?.stop()
         homeScreenVisible = null
         // Read here so a change made in Settings applies when the projection comes back.
@@ -1204,7 +1214,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        WheelKeyService.restoreIfNeeded(this)
+        if (!AionIntegration.enabled(this)) WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
         updateCallPopupGuard()
         val savedNightMode = AirPlayPersistence.loadCarPlayNightMode(this)
@@ -1251,30 +1261,34 @@ open class CarPlayHostActivity : ComponentActivity() {
         advancedAudioChannelMapping =
             advancedAudioChannelMappingSupported &&
                 AirPlayPersistence.loadAdvancedAudioChannelMapping(this)
-        val followClusterUsage = DiLink51ClusterLayout.automatic(this) ||
-            AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO
+        val followClusterUsage = !AionIntegration.enabled(this) && (DiLink51ClusterLayout.automatic(this) ||
+            AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO)
         if (followClusterUsage && clusterMonitor == null) {
             clusterMonitor = DiLink51ClusterMonitor(this, ::onClusterActivityState).also { it.start() }
         } else if (!followClusterUsage) {
             clusterMonitor?.stop()
             clusterMonitor = null
         }
-        if (AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO) {
-            com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener { mode ->
-                mainHandler.post { onAdbNaviMode(mode) }
+        if (!AionIntegration.enabled(this)) {
+            if (AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO) {
+                com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener { mode ->
+                    mainHandler.post { onAdbNaviMode(mode) }
+                }
+            } else {
+                com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener(null)
+                adbNaviMode = null
             }
-        } else {
-            com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener(null)
-            adbNaviMode = null
         }
         if (!menuOpen) gestureFingerCount = AirPlayPersistence.loadSettingsGestureFingers(this)
         if (!menuOpen) temporarySystemBarsEnabled = AirPlayPersistence.loadTemporarySystemBars(this)
         settingsGestureHint?.text = settingsGestureHintText()
         ensureClusterPresentation()
-        AirPlayPersistence.overlaySettingsListener = { runOnUiThread { applyClusterTurnOverlay() } }
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.setTurnOverlayListener(clusterTurnOverlayListener)
-        mainHandler.removeCallbacks(refreshTurnOverlay)
-        mainHandler.post(refreshTurnOverlay)
+        if (!AionIntegration.enabled(this)) {
+            AirPlayPersistence.overlaySettingsListener = { runOnUiThread { applyClusterTurnOverlay() } }
+            com.shilapi.xcertplay.hud.BydNavigationOutputs.setTurnOverlayListener(clusterTurnOverlayListener)
+            mainHandler.removeCallbacks(refreshTurnOverlay)
+            mainHandler.post(refreshTurnOverlay)
+        }
         var systemBarsChanged = false
         if (!menuOpen) {
             val savedHideTopBar = AirPlayPersistence.loadHideTopBar(this)
@@ -1354,7 +1368,23 @@ open class CarPlayHostActivity : ComponentActivity() {
     private fun clusterOutputReady(): Boolean = activeAirPlaySession?.hasRenderedMainFrame == true &&
         !isDestroyed && !handshakeResetInProgress && !shuttingDown.get()
 
+    private fun ensureAionInstrumentMap() {
+        val preferences = com.shilapi.xcertplay.aion.AionMapSettings.prefs(this)
+        val project = com.shilapi.xcertplay.aion.AionDevicePolicy.project(
+            AirPlayPersistence.loadClusterMapEnabled(this) && preferences.getBoolean("automatic", false), preferences.getBoolean("paused", false),
+            clusterOutputReady(), SCREEN_TYPE_ALT in activeScreenStreamTypes)
+        if (!project) {
+            val old = aionInstrumentMap; aionInstrumentMap = null; old?.close()
+            return
+        }
+        val output = aionInstrumentMap ?: com.shilapi.xcertplay.aion.AionInstrumentMap(this,
+            surfaceChanged = { onClusterSurface(it) }, visibilityChanged = { updateClusterMapShown() }
+        ).also { aionInstrumentMap = it }
+        if (!output.show()) { output.close(); aionInstrumentMap = null }
+    }
+
     private fun ensureClusterPresentation() {
+        if (AionIntegration.enabled(this)) { ensureAionInstrumentMap(); return }
         if (!AirPlayPersistence.loadClusterMapEnabled(this)) {
             clusterLaunchGate.reset()
             dismissClusterPresentation()
@@ -1486,6 +1516,7 @@ open class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun applyClusterTurnOverlay() {
+        if (AionIntegration.enabled(this)) return
         val overlay = CarPlayClusterDisplay.usesCustomTurnCard(AirPlayPersistence.loadClusterContent(this))
         // CN: the small-window navi keeps a second card rect, and the card glass has a theme override.
         val smallWindow = smallWindowActive()
@@ -1519,6 +1550,13 @@ open class CarPlayHostActivity : ComponentActivity() {
         }
     }
     private fun dismissClusterPresentation() {
+        val aionOutput = aionInstrumentMap; aionInstrumentMap = null; aionOutput?.close()
+        if (AionIntegration.enabled(this)) {
+            clusterSurface?.let { sink?.clearSurface(SCREEN_TYPE_ALT, it) }
+            clusterSurface = null
+            controller?.setDashboardMapOutputVisible(false)
+            return
+        }
         ClusterActivityOutput.stop(this)
         val presentations = (clusterLayers.values + listOfNotNull(clusterPresentation)).distinct()
         clusterLayers.clear()
@@ -1557,6 +1595,10 @@ open class CarPlayHostActivity : ComponentActivity() {
     // finish after the session has already asked for the virtual fallback stream.
     private val clusterDisplayListener = object : android.hardware.display.DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {
+            if (AionIntegration.enabled(this@CarPlayHostActivity)) {
+                if (displayId == 1) ensureClusterPresentation()
+                return
+            }
             if (isDestroyed || !AirPlayPersistence.loadClusterMapEnabled(this@CarPlayHostActivity)) return
             val display = ClusterMapPresentation.findDisplay(this@CarPlayHostActivity, effectiveClusterTheme())
             if (display?.displayId != displayId) return
@@ -1566,8 +1608,14 @@ open class CarPlayHostActivity : ComponentActivity() {
                 reconnectAfterLoss("Cluster display appeared; requesting its stream")
             }
         }
-        override fun onDisplayRemoved(displayId: Int) = Unit
-        override fun onDisplayChanged(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) {
+            if (displayId == 1 && AionIntegration.enabled(this@CarPlayHostActivity)) {
+                val old = aionInstrumentMap; aionInstrumentMap = null; old?.close()
+            }
+        }
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == 1 && AionIntegration.enabled(this@CarPlayHostActivity)) ensureClusterPresentation()
+        }
     }
 
     private fun clusterDisplayConfig(): AirPlayDisplayConfig? {
@@ -1575,6 +1623,13 @@ open class CarPlayHostActivity : ComponentActivity() {
         clusterStreamOnDisplay = false
         requestedSmallWindowForStream = null
         if (!AirPlayPersistence.loadClusterMapEnabled(this)) return null
+        if (AionIntegration.enabled(this)) {
+            if (!AionIntegration.supported()) return null
+            if (!com.shilapi.xcertplay.aion.AionMapSettings.prefs(this).getBoolean("automatic", false)) return null
+            clusterStreamOnDisplay = true
+            return CarPlayClusterDisplay.config(1920, 720, scalePercent = 100,
+                content = CarPlayClusterDisplay.Content.MAP)
+        }
         // 已选择的 ADB 路由使用固定尺寸，无需启动仪表 Activity 才能准备流参数。
         if (AdbClusterRouter.enabled(this)) {
             adbClusterConfigured = true
@@ -1869,7 +1924,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         super.onStop()
         // Off screen there are no system bars to hide, so a launch waiting for focus can go now.
         onClusterLaunchTick()
-        if (!isFinishing && !isChangingConfigurations) {
+        if (!AionIntegration.enabled(this) && !isFinishing && !isChangingConfigurations) {
             CenterMapOverlay.scheduleShow()
             LauncherBubble.scheduleShow()
         }
@@ -1877,6 +1932,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     /** Shows the dashboard map as a card on the centre screen while DiPlay is in the background. */
     private fun showCenterMap() {
+        if (AionIntegration.enabled(this)) return
         if (isDestroyed || shuttingDown.get() || sink == null || isActivityStarted) return
         if (!AirPlayPersistence.loadCenterMapOverlay(this) || !AirPlayPersistence.loadClusterMapEnabled(this)) return
         if (!AirPlayPersistence.loadCenterMapFollowsDashboard(this)) return
@@ -1923,6 +1979,11 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     // The dashboard map pause must not stop the stream while a copy of the map is on screen.
     private fun updateClusterMapShown() {
+        if (AionIntegration.enabled(this)) {
+            val output = aionInstrumentMap
+            controller?.setDashboardMapOutputVisible(output?.showing == true && output.rendered && clusterSurface?.isValid == true)
+            return
+        }
         com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterMapShown((clusterPresentation != null ||
             (ClusterActivityOutput.hasConfirmedRoute() && clusterSurface != null)) && !MapMirrors.any)
         // Wheel zoom needs a physical map; centre-screen copies must not suppress that eligibility.
@@ -1985,9 +2046,12 @@ open class CarPlayHostActivity : ComponentActivity() {
         doubleSiriFirstPressWasInCall = false
         pendingDoubleSiri = null
         delayedDoubleSiri = null
+        if (com.shilapi.xcertplay.aion.AionMapSettings.onChanged === aionMapChanged) com.shilapi.xcertplay.aion.AionMapSettings.onChanged = null
         AirPlayPersistence.overlaySettingsListener = null
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.setTurnOverlayListener(null)
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener(null)
+        if (!AionIntegration.enabled(this)) {
+            com.shilapi.xcertplay.hud.BydNavigationOutputs.setTurnOverlayListener(null)
+            com.shilapi.xcertplay.hud.BydNavigationOutputs.setClusterNaviModeListener(null)
+        }
         clusterMonitor?.stop()
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.unregisterDisplayListener(clusterDisplayListener)
@@ -2783,6 +2847,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     // The battery shows only where DiPlay already reads it for the iPhone.
     private fun refreshSidePanel() {
+        if (AionIntegration.enabled(this)) return
         val battery = if (com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)) {
             com.shilapi.xcertplay.hud.BydNavigationOutputs.batteryStatus(applicationContext).snapshot()
         } else null
@@ -5103,7 +5168,7 @@ open class CarPlayHostActivity : ComponentActivity() {
             model = normalizedModel(),
             oemLabel = oemLabel,
             icons = listOf(loadAirPlayIcon()),
-            videoInCar = com.shilapi.xcertplay.hud.BydOutputSettings.videoWhileParkedActive(this),
+            videoInCar = !AionIntegration.enabled(this) && com.shilapi.xcertplay.hud.BydOutputSettings.videoWhileParkedActive(this),
             mainBufferedAudio = AirPlayPersistence.loadMainBufferedAudio(this),
             speechWithout8And16Khz = AirPlayPersistence.loadSpeechWithout8And16Khz(this),
             callAtCallRate = AirPlayPersistence.loadCallAtCallRate(this),
@@ -5315,6 +5380,8 @@ open class CarPlayHostActivity : ComponentActivity() {
                 onScreenStreamStateChanged(controllerGeneration, type, active)
             },
             mediaBufferMillis = AirPlayPersistence.loadMediaBufferMillis(this, wireless = wirelessEnabled),
+            // AION's Android 8.1 AudioTrack clock is firmware-owned; avoid audible pitch/speed shifts.
+            mediaClockTrimEnabled = !AionIntegration.enabled(this),
             onAudioDiagnostic = { message ->
                 if (message.startsWith("Microphone: ")) {
                     AsyncDiagnosticLog.append(diagnosticLog, message)
@@ -5392,6 +5459,8 @@ open class CarPlayHostActivity : ComponentActivity() {
                 runOnUiThread {
                     if (controllerGeneration != restartGeneration || activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
                     val firstFrame = startupRetryBudget.firstFrame(session, android.os.SystemClock.elapsedRealtime())
+                    if (AionIntegration.enabled(this@CarPlayHostActivity))
+                        com.shilapi.xcertplay.aion.AionStartupTrace.firstFrame(this@CarPlayHostActivity)
                     if (firstFrame) appendLog("Main video first frame rendered; cluster output may start")
                     ensureClusterPresentation()
                     if (!firstFrame) return@runOnUiThread
@@ -5479,6 +5548,13 @@ open class CarPlayHostActivity : ComponentActivity() {
         controllerGeneration: Int,
     ): (CarPlayStatus) -> Unit = report@{ status ->
         if (controllerGeneration != restartGeneration) return@report
+        if (AionIntegration.enabled(this)) {
+            when (status) {
+                is CarPlayStatus.HotspotReady -> com.shilapi.xcertplay.aion.AionStartupTrace.stage(this, "hotspot")
+                CarPlayStatus.ConnectingBluetooth -> com.shilapi.xcertplay.aion.AionStartupTrace.stage(this, "bluetooth")
+                else -> Unit
+            }
+        }
         if (status is CarPlayStatus.RunningControl || status is CarPlayStatus.RunningWireless) {
             controlRunningCount++
             lossSinceControlRunning = false
@@ -5638,6 +5714,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         val locationProvider: Iap2LocationProvider? =
             when {
                 !config.locationReportingEnabled -> null
+                AionIntegration.enabled(this) -> AndroidCarPlayLocationProvider(this)
                 config.identification.vehicleSpeedEnabled &&
                     !com.shilapi.xcertplay.hud.BydOutputSettings.wheelSpeedToIphoneActive(this) ->
                     // ECARX: the head unit has no GPS of its own, so only the wheel speed goes to the iPhone.
@@ -5690,6 +5767,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         val pairings = AirPlayPersistence.loadPairings(this) { id, key ->
             AirPlayPersistence.savePairing(this, id, key)
         }
+        if (AionIntegration.enabled(this)) com.shilapi.xcertplay.aion.AionStartupTrace.stage(this, "controller")
         val next = CarPlayController(
             context = this,
             config = config,
@@ -5703,7 +5781,7 @@ open class CarPlayHostActivity : ComponentActivity() {
             savePairRecord = { record -> AirPlayPersistence.saveLockdownRecord(this, record) },
             clearPairRecord = { AirPlayPersistence.clearLockdownRecord(this) },
             locationProvider = locationProvider,
-            vehicleStatusProvider = if (com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)) {
+            vehicleStatusProvider = if (!AionIntegration.enabled(this) && com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)) {
                 com.shilapi.xcertplay.hud.BydNavigationOutputs.batteryStatus(applicationContext)
             } else {
                 null
@@ -5713,7 +5791,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         resetSidePanel() // a new session starts without the side panel
         updateClusterMapShown()
         CarPlayMediaKeys.attach(this, next)
-        if (airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
+        if (!AionIntegration.enabled(this) && airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
         val display = CarPlaySessionDisplay(
             airPlayConfig.main.widthPixels, airPlayConfig.main.heightPixels,
             displayRotation(), hideTopBar, hideBottomBar, effectiveSize.width, effectiveSize.height,
@@ -5808,9 +5886,10 @@ open class CarPlayHostActivity : ComponentActivity() {
             return
         }
         pendingDisplaySize = size
-        // With a turning screen's square canvas nothing reconnects, so the turn need not wait for the size to settle.
+        // An initial AION layout starts immediately. Running sessions retain the resize debounce.
         mainHandler.postDelayed(applyDisplaySize,
-            if (sessionDisplay?.viewAreas?.turnsWithScreen == true) 0L else DISPLAY_CHANGE_DEBOUNCE_MILLIS)
+            if ((AionIntegration.enabled(this) && activeDisplaySize == null && controller == null) ||
+                sessionDisplay?.viewAreas?.turnsWithScreen == true) 0L else DISPLAY_CHANGE_DEBOUNCE_MILLIS)
     }
 
     private fun isMultiWindowActive(): Boolean {
@@ -6181,6 +6260,12 @@ open class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun openSettingsMenu() {
+        if (AionIntegration.enabled(this)) {
+            releaseCarPlayTouches()
+            OwnScreenStart.start(this, Intent(this, DiPlayActivity::class.java)
+                .putExtra("page", "settings").addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            return
+        }
         cancelTemporarySystemBars()
         if (menuOpen) return
         releaseCarPlayTouches()
@@ -6683,6 +6768,11 @@ open class CarPlayHostActivity : ComponentActivity() {
                 noPictureShown = false
                 mainHandler.removeCallbacks(noPictureCheck)
                 if (active) mainHandler.postDelayed(noPictureCheck, NO_PICTURE_MILLIS)
+            }
+            if (type == SCREEN_TYPE_ALT && AionIntegration.enabled(this)) {
+                ensureClusterPresentation()
+                updateDebugOverlays()
+                return@runOnUiThread
             }
             if (type == SCREEN_TYPE_ALT) {
                 Log.i(ClusterMapPresentation.TAG, "cluster stream active=$active")

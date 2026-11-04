@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <bool name="aion_edition">false</bool>
+    <!-- Generic library aliases; the mobile edition supplies its Chinese-only copy. -->
+    <item type="string" name="aion_bluetooth">@string/bluetooth_settings</item>
+    <item type="string" name="aion_bluetooth_description">@string/connect_when_iphone_bluetooth_connects_description</item>
+    <item type="string" name="aion_bluetooth_open">@string/bluetooth_settings</item>
+    <item type="string" name="aion_music">@string/audio</item>
+    <item type="string" name="aion_music_description">@string/settings_audio_summary</item>
+    <item type="string" name="aion_music_open">@string/audio</item>
+    <item type="string" name="aion_map">@string/settings_navigation</item>
+    <item type="string" name="aion_map_description">@string/settings_navigation_summary</item>
+    <item type="string" name="aion_map_open">@string/settings_navigation</item>
+    <item type="string" name="aion_permissions_open">@string/app_permissions</item>
+</resources>

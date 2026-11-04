@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AndroidMediaSinkStateTest {
+    @Test fun mediaClockTrimCanBeDisabledWithoutChangingOtherChannels() {
+        assertFalse(shouldUseMediaClockTrim(AudioChannel.MEDIA, enabled = false))
+        assertTrue(shouldUseMediaClockTrim(AudioChannel.MEDIA, enabled = true))
+        assertFalse(shouldUseMediaClockTrim(AudioChannel.NAVIGATION, enabled = true))
+        assertFalse(shouldUseMediaClockTrim(AudioChannel.PHONE, enabled = true))
+    }
     @Test fun recreatingTheScreenRestoresItsActiveVideoState() {
         val sink = AndroidMediaSink()
         sink.onScreenStreamActive(110, true)

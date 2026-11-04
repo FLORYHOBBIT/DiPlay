@@ -15,10 +15,12 @@ android {
 
     defaultConfig {
         applicationId = "com.shihab.diplay"
-        minSdk = 24
+        minSdk = 27
         targetSdk = 37
-        versionCode = 41
-        versionName = "0.2.22"
+        versionCode = 4203
+        versionName = "0.2.22-aion"
+        resourceConfigurations += listOf("zh-rCN")
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
 
     }
 
@@ -39,14 +41,24 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".hudtest"
-            versionNameSuffix = "-hud-test"
+            applicationIdSuffix = ".aion"
+            versionNameSuffix = "-test"
         }
         release {
             optimization {
                 enable = false
             }
             signingConfig = signingConfigs.getByName("release")
+        }
+        create("aionSlim") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".aion"
+            versionNameSuffix = "-lite"
+            // Same local signing identity as the previous AION package: in-place update keeps pairing.
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+            optimization { enable = true }
         }
     }
     compileOptions {
@@ -56,6 +68,7 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging.resources.excludes += "org/bouncycastle/pqc/**"
 }
 
 dependencies {
@@ -70,6 +83,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    // Referenced explicitly by this product's manifest to select only required startup initializers.
+    implementation("androidx.startup:startup-runtime:1.1.1")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
@@ -117,4 +132,10 @@ tasks.register("assembleStandaloneDebug") {
     group = "build"
     description = "Build a standalone car-test APK with explicitly provisioned authentication."
     dependsOn(verifyStandaloneAuthentication, "assembleDebug")
+}
+
+tasks.register("assembleStandaloneAionSlim") {
+    group = "build"
+    description = "Build the optimized, standalone AION Android 8.1 APK."
+    dependsOn(verifyStandaloneAuthentication, "assembleAionSlim")
 }

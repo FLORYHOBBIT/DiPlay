@@ -55,6 +55,7 @@ internal object CarPlayMediaKeys {
     private val ambientColorCache = LinkedHashMap<Int, Int?>()
     private var initialAlbumRecovery = InitialAlbumRecovery()
     private var initialAlbumRetry: Runnable? = null
+    private var sentMusicOwner: Any? = null
     private var controller: CarPlayController? = null
     private var session: MediaSession? = null
     private var focusRequest: AudioFocusRequestCompat? = null
@@ -79,7 +80,7 @@ internal object CarPlayMediaKeys {
         }
         appContext = context.applicationContext
         controller = next
-        GeelyWheelKeys.start(context)
+        if (!AionIntegration.enabled(context)) GeelyWheelKeys.start(context)
         com.shilapi.xcertplay.media.AmbientMusicController.claimPlaybackOwner(next)
         next.playbackListener = { playing ->
             com.shilapi.xcertplay.media.AmbientMusicController.phonePlaybackChanged(next, playing)
@@ -161,6 +162,11 @@ internal object CarPlayMediaKeys {
     private fun onArtworkChanged(expected: CarPlayController, id: Int, bytes: ByteArray) {
         if (controller !== expected) return
         artworkOwner?.let { artworkQueue.submit(it, id, bytes) }
+        mainHandler.post {
+            synchronized(this) {
+                if (controller === expected && nowPlaying.artworkTransferId == id) publishAionMusicLocked()
+            }
+        }
     }
 
     @Synchronized
@@ -385,6 +391,7 @@ internal object CarPlayMediaKeys {
             it.isActive = false
             it.release()
         }
+        appContext?.let { context -> sentMusicOwner?.let { com.shilapi.xcertplay.aion.AionInstrumentMusic.clear(context, it) } }; sentMusicOwner = null
         session = null
         mediaAudioActive = false
         nowPlaying = CarPlayNowPlaying()
@@ -397,7 +404,18 @@ internal object CarPlayMediaKeys {
         transientFocusInterrupted = false
     }
 
+    private fun publishAionMusicLocked() {
+        val owner = controller ?: return
+        val context = appContext ?: return
+        if (!AionIntegration.enabled(context)) return
+        val playing = if (nowPlaying.elapsedMillis != null || nowPlaying.title != null) nowPlaying.playing else mediaAudioActive
+        sentMusicOwner = owner
+        com.shilapi.xcertplay.aion.AionInstrumentMusic.publish(context, owner, nowPlaying,
+            owner.matchingArtworkSnapshot(nowPlaying.artworkTransferId)?.bytes, playing)
+    }
+
     private fun publishPlaybackStateLocked() {
+        publishAionMusicLocked()
         val playing = if (nowPlaying.elapsedMillis != null || nowPlaying.title != null) {
             nowPlaying.playing
         } else {
@@ -421,7 +439,7 @@ internal object CarPlayMediaKeys {
     private fun send(index: Int, source: String) {
         // While the car's video player is on screen the wheel drives it: a CarPlay play/pause would
         // make the iPhone end the video session.
-        if (CarPlayVideo.onMediaKey(index)) {
+        if (appContext?.let { !AionIntegration.enabled(it) } == true && CarPlayVideo.onMediaKey(index)) {
             Log.i(TAG, "media key $source -> car video player $index")
             WheelKeyLog.note("media key $source -> car video player $index")
             return

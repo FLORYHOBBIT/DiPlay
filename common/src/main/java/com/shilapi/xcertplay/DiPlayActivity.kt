@@ -132,6 +132,7 @@ internal enum class SettingsSection {
     BYD_NAVIGATION,
     PERMISSIONS_AND_HELP,
     LANGUAGE,
+    AION_BLUETOOTH, AION_MUSIC, AION_MAP,
 }
 
 internal object SettingsInformationArchitecture {
@@ -141,14 +142,15 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.ABOUT to emptySet(),
         SettingsCategory.CONNECTION to setOf(
             SettingsSection.CONNECTION_SETUP,
+            SettingsSection.AION_BLUETOOTH,
             SettingsSection.AUTOMATIC_CONNECTION,
             SettingsSection.USB_CONNECTION,
             SettingsSection.BYD_ADB,
             SettingsSection.PERMISSIONS_AND_HELP,
         ),
         SettingsCategory.DISPLAY to setOf(SettingsSection.DISPLAY_AND_PERFORMANCE),
-        SettingsCategory.AUDIO to setOf(SettingsSection.AUDIO_ROUTING),
-        SettingsCategory.NAVIGATION to setOf(SettingsSection.LOCATION, SettingsSection.BYD_NAVIGATION),
+        SettingsCategory.AUDIO to setOf(SettingsSection.AUDIO_ROUTING, SettingsSection.AION_MUSIC),
+        SettingsCategory.NAVIGATION to setOf(SettingsSection.LOCATION, SettingsSection.BYD_NAVIGATION, SettingsSection.AION_MAP),
         SettingsCategory.VEHICLE to setOf(
             SettingsSection.CARPLAY_CONTROLS,
             SettingsSection.WHEEL_KEYS,
@@ -375,20 +377,22 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AionIntegration.initialize(this)
+        if (AionIntegration.enabled(this)) com.shilapi.xcertplay.aion.AionBluetoothReceiver.resume(this)
         // Back on the home page finishes this activity while the session runs on, so the icon lands here.
         if (savedInstanceState == null && isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
             openProjection(); finish(); return
         }
-        scheduleBackgroundUpdateChecks()
+        if (!AionIntegration.enabled(this)) scheduleBackgroundUpdateChecks()
         availableUpdate = UpdateAvailability.available(this, version())
         enforceInterfaceSize()
         refreshAppearance()
         rememberLaunchAppearance()
         languagePreferenceAtCreate = AppLocale.preference(this)
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
+        if (!AionIntegration.enabled(this)) com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
         // A previous run may have been killed while it held the cluster projection; hand it back
         // before showing anything, so the cluster is not left on DiPlay's last frame.
-        GeelyClusterProjection.releaseStale(applicationContext)
+        if (!AionIntegration.enabled(this)) GeelyClusterProjection.releaseStale(applicationContext)
         PhoneAudioRoute.attach(applicationContext)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= 28) {
@@ -414,7 +418,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             ?: if (setupError == null && SetupGuide.shouldOpenOnLaunch(SetupGuide.seen(this),
                     DiPlayPreferences.phoneAddress(this) != null)) "setup" else "home"
         render()
-        scheduleAutomaticVehicleValidation()
+        if (!AionIntegration.enabled(this)) scheduleAutomaticVehicleValidation()
         handleWirelessRecovery()
         if (consumeBluetoothAutoConnectIntent(intent)) {
             if (initialLaunch) {
@@ -441,7 +445,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         page = requestedPage(intent) ?: "home"; render()
         automaticVehicleValidationStarted = false
-        scheduleAutomaticVehicleValidation()
+        if (!AionIntegration.enabled(this)) scheduleAutomaticVehicleValidation()
         handleWirelessRecovery()
         if (consumeBluetoothAutoConnectIntent(intent)) {
             if (initialLaunch) {
@@ -522,7 +526,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     override fun onResume() {
         super.onResume()
-        WheelKeyService.restoreIfNeeded(this)
+        if (AionIntegration.enabled(this) && AionIntegration.consumeReconnectNeeded(this)) markReconnectNeeded()
+        if (!AionIntegration.enabled(this)) WheelKeyService.restoreIfNeeded(this)
         applyFullscreenMode()
         // Returning from another activity can bring the head unit's own density back.
         if (enforceInterfaceSize()) render()
@@ -651,6 +656,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun render() = render(appearanceOnly = false)
 
     private fun render(appearanceOnly: Boolean, preferredFocusTag: Any? = null) {
+        if (AionIntegration.enabled(this)) {
+            if (page == "setup") page = "connection"
+            if (settingsCategory !in AionIntegration.categories(this)) settingsCategory = SettingsCategory.OVERVIEW
+        }
         enforceInterfaceSize()
         refreshAppearance()
         applyWindowAppearance()
@@ -1089,7 +1098,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun settingsRail(): LinearLayout = column().apply {
         background = rounded(SURFACE, BORDER)
         setPadding(dp(12), dp(12), dp(12), dp(12))
-        SettingsCategory.entries.forEach { category ->
+        AionIntegration.categories(this@DiPlayActivity).forEach { category ->
             addView(settingsRailDestination(category), matchButton(0, 52).apply {
                 bottomMargin = if (category == SettingsCategory.entries.last()) 0 else dp(8)
             })
@@ -1207,6 +1216,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             SettingsCategory.DIAGNOSTICS to R.string.settings_diagnostics_summary,
             SettingsCategory.ADVANCED to R.string.settings_advanced_subtitle,
         )
+        val visibleDestinations = destinations.filter { it.first in AionIntegration.categories(this) }
         val categoryGap = dp(SETTINGS_BLOCK_GAP_DP)
         val twoColumns = isExpandedSettingsLayout && resources.configuration.let {
             SettingsLayoutPolicy.overviewHasTwoColumns(it.screenWidthDp, it.fontScale)
@@ -1215,7 +1225,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             val columns = row().apply { gravity = Gravity.TOP }
             val setup = column()
             setup.addView(settingsSectionHeading(R.string.settings_your_setup))
-            destinations.forEach { item ->
+            visibleDestinations.forEach { item ->
                 setup.addView(settingsSummaryCard(item.first, getString(item.second)),
                     LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = categoryGap })
             }
@@ -1228,7 +1238,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             content.addView(columns, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
         } else {
             content.addView(settingsSectionHeading(R.string.settings_your_setup))
-            destinations.forEach { item ->
+            visibleDestinations.forEach { item ->
                 content.addView(settingsSummaryCard(item.first, getString(item.second)),
                     LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = categoryGap })
             }
@@ -1385,7 +1395,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsPageTitle(content, getString(R.string.settings_navigation), getString(R.string.settings_navigation_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.NAVIGATION))
         // The BYD card is hidden without its receiver; say so instead of leaving a gap.
-        if (!BydOutputSettings.available(this)) {
+        if (!AionIntegration.enabled(this) && !BydOutputSettings.available(this)) {
             content.addView(label(getString(R.string.settings_byd_navigation_unavailable), 15, MUTED).apply {
                 setPadding(dp(4), 0, dp(4), dp(SETTINGS_BLOCK_GAP_DP))
             })
@@ -1395,6 +1405,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun vehicleSettings(content: LinearLayout) {
         settingsPageTitle(content, getString(R.string.settings_vehicle), getString(R.string.settings_vehicle_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.VEHICLE))
+        if (AionIntegration.enabled(this)) return
         section(content, getString(R.string.settings_advanced), R.drawable.ic_dp_advanced) { card ->
             card.addView(label(getString(R.string.settings_vehicle_description), 16, MUTED))
             card.addView(button(getString(R.string.settings_open_advanced), false) {
@@ -1417,9 +1428,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun buildSettingsSearchIndex(): List<SettingsSearchResult> {
         val selected = settingsCategory
         // Category names first, so a card that only links to a category cannot claim its name.
-        val index = SettingsCategory.entries.associateByTo(linkedMapOf(), ::settingsCategoryTitle)
+        val index = AionIntegration.categories(this).associateByTo(linkedMapOf(), ::settingsCategoryTitle)
         try {
-            for (category in SettingsCategory.entries.filter { it != SettingsCategory.OVERVIEW } + SettingsCategory.OVERVIEW) {
+            for (category in AionIntegration.categories(this).filter { it != SettingsCategory.OVERVIEW } + SettingsCategory.OVERVIEW) {
                 settingsCategory = category
                 val titles = mutableListOf(settingsCategoryTitle(category))
                 searchIndexSink = titles
@@ -1722,6 +1733,26 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun allSettingsSections(content: LinearLayout) {
+        if (AionIntegration.enabled(this)) {
+            filteredSection(content, SettingsSection.AION_BLUETOOTH, getString(R.string.aion_bluetooth)) { card ->
+                card.addView(label(getString(R.string.aion_bluetooth_description), 16, MUTED))
+                card.addView(button(getString(R.string.aion_bluetooth_open), false) {
+                    startActivity(Intent(this, com.shilapi.xcertplay.aion.BluetoothMediaActivity::class.java))
+                }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
+            }
+            filteredSection(content, SettingsSection.AION_MUSIC, getString(R.string.aion_music)) { card ->
+                card.addView(label(getString(R.string.aion_music_description), 16, MUTED))
+                card.addView(button(getString(R.string.aion_music_open), false) {
+                    startActivity(Intent(this, com.shilapi.xcertplay.aion.MusicClusterActivity::class.java))
+                }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
+            }
+            filteredSection(content, SettingsSection.AION_MAP, getString(R.string.aion_map)) { card ->
+                card.addView(label(getString(R.string.aion_map_description), 16, MUTED))
+                card.addView(button(getString(R.string.aion_map_open), false) {
+                    startActivity(Intent(this, com.shilapi.xcertplay.aion.InstrumentMapActivity::class.java))
+                }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
+            }
+        }
         filteredSection(content, SettingsSection.CARPLAY_CONTROLS,
             getString(R.string.carplay_controls), R.drawable.ic_dp_controls) { card ->
             val gestureFingers = listOf(0, 2, 3, 4)
@@ -1736,7 +1767,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             })
             toggle(card, getString(R.string.right_hand_drive), getString(R.string.place_carplay_s_controls_closer_to_the_driver), AirPlayPersistence.loadRightHandDrive(this)) { AirPlayPersistence.saveRightHandDrive(this, it); markReconnectNeeded() }
         }
-        filteredSection(content, SettingsSection.WHEEL_KEYS,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.WHEEL_KEYS,
             getString(R.string.settings_wheel_keys), R.drawable.ic_dp_controls, ::wheelKeysSettings)
         filteredSection(content, SettingsSection.CONNECTION_SETUP,
             getString(R.string.connection_setup), R.drawable.ic_dp_connection) { card ->
@@ -1747,7 +1778,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             // so that menu could not be reached to switch back (#696).
             val mfiTargets = listOf(MfiTarget.LOCAL, MfiTarget.USB_CH341)
             val storedMfiTarget = AirPlayPersistence.loadMfiTarget(this)
-            if (storedMfiTarget in mfiTargets) {
+            if (!AionIntegration.enabled(this) && storedMfiTarget in mfiTargets) {
                 choice(card, getString(R.string.mfi_certificate_signing_target), listOf(
                     getString(R.string.local_offline),
                     getString(R.string.usb_ch341),
@@ -1778,7 +1809,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.AUTOMATIC_CONNECTION,
             getString(R.string.automatic_connection), R.drawable.ic_dp_automation) { card ->
             toggle(card, getString(R.string.connect_when_diplay_opens), getString(R.string.default_connection_description), DiPlayPreferences.autoConnect(this)) { DiPlayPreferences.saveAutoConnect(this, it) }
-            toggle(card, getString(R.string.connect_when_iphone_bluetooth_connects),
+            if (!AionIntegration.enabled(this)) toggle(card, getString(R.string.connect_when_iphone_bluetooth_connects),
                 getString(R.string.connect_when_iphone_bluetooth_connects_description),
                 DiPlayPreferences.connectOnPhoneBluetooth(this)) { enabled ->
                 DiPlayPreferences.saveConnectOnPhoneBluetooth(this, enabled)
@@ -1795,7 +1826,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             ), connectionModes.indexOf(DiPlayPreferences.defaultConnectionMode(this)), reconnects = false) {
                 DiPlayPreferences.saveDefaultConnectionMode(this, connectionModes[it])
             }
-            adbToggle(card, R.string.open_after_the_car_starts,
+            if (!AionIntegration.enabled(this)) adbToggle(card, R.string.open_after_the_car_starts,
                 R.string.availability_depends_on_your_head_unit_s_startup_settings,
                 read = { AirPlayPersistence.loadAutoStartOnBoot(this) },
                 needsAdb = { CarHotspotSettings.enabled(this) &&
@@ -1831,8 +1862,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     setPadding(0, dp(4), 0, dp(8))
                 })
             }
-            card.addView(button(getString(R.string.boot_start_repair), false) { repairBootStart() }, matchButton(6, 56))
-            card.addView(label(getString(R.string.boot_start_repair_desc), 14, MUTED).apply { setPadding(0, dp(8), 0, dp(6)) })
+            if (!AionIntegration.enabled(this)) card.addView(button(getString(R.string.boot_start_repair), false) { repairBootStart() }, matchButton(6, 56))
+            if (!AionIntegration.enabled(this)) card.addView(label(getString(R.string.boot_start_repair_desc), 14, MUTED).apply { setPadding(0, dp(8), 0, dp(6)) })
             card.addView(button(chooseIphoneTitle(), false) { choosePhone() }, matchButton(12, 60))
         }
         filteredSection(content, SettingsSection.USB_CONNECTION,
@@ -1848,7 +1879,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
             card.addView(label(getString(R.string.settings_usb_charging_description), 14, MUTED))
         }
-        if (settingsSectionFilter?.contains(SettingsSection.BYD_ADB) != false) bydAdbSettings(content)
+        if (!AionIntegration.enabled(this) && settingsSectionFilter?.contains(SettingsSection.BYD_ADB) != false) bydAdbSettings(content)
         filteredSection(content, SettingsSection.DISPLAY_AND_PERFORMANCE,
             getString(R.string.display_and_performance), R.drawable.ic_dp_display) { card ->
             val appearances = AppAppearance.entries
@@ -1942,7 +1973,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 render()
             }
         }
-        filteredSection(content, SettingsSection.EXPERIMENTAL_DISPLAY,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.EXPERIMENTAL_DISPLAY,
             getString(R.string.settings_experimental_display), R.drawable.ic_dp_display) { card ->
             toggle(card, getString(R.string.settings_harman_fullscreen_experimental),
                 getString(R.string.settings_harman_fullscreen_experimental_description),
@@ -1982,7 +2013,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
         }
         // Opt-in controls that can cost sound or video on some head units.
-        filteredSection(content, SettingsSection.ADVANCED_MEDIA,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && CarHotspotSetup.isBydHeadUnit(this)) {
                 toggle(card, getString(R.string.settings_hide_byd_call_popup),
@@ -2111,11 +2142,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             toggle(card, getString(R.string.settings_call_speakerphone), getString(R.string.settings_call_speakerphone_description),
                 AirPlayPersistence.loadCallSpeakerphone(this)) { AirPlayPersistence.saveCallSpeakerphone(this, it) }
         }
-        filteredSection(content, SettingsSection.NAVIGATION_WHEEL,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.NAVIGATION_WHEEL,
             getString(R.string.settings_navigation_wheel_volume), R.drawable.ic_dp_audio) { card ->
             navigationWheelControls(card)
         }
-        filteredSection(content, SettingsSection.AMBIENT_LIGHTING, getString(R.string.settings_ambient_title)) { card ->
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.AMBIENT_LIGHTING, getString(R.string.settings_ambient_title)) { card ->
             card.addView(button(ambientConfigurationLabel(AmbientMusicSettings.load(this)), false) {
                 showAmbientConfiguration()
             }, matchButton(0, 60))
@@ -2134,7 +2165,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         // A launcher shortcut. Some head units' launchers list only their own cards, so a normally
         // installed app never appears on the home screen; this app draws its own way back instead (#650).
-        filteredSection(content, SettingsSection.LAUNCHER_BUBBLE,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.LAUNCHER_BUBBLE,
             getString(R.string.settings_launcher_bubble), R.drawable.ic_dp_bubble) { card ->
             toggle(card, getString(R.string.settings_launcher_bubble),
                 getString(R.string.settings_launcher_bubble_description),
@@ -2156,7 +2187,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             }
         }
         // Cluster video does not require a BYD navigation broadcast receiver.
-        filteredSection(content, SettingsSection.CLUSTER_MAP,
+        if (!AionIntegration.enabled(this)) filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
             // DiLink 3 makes its own dashboard display; either DiLink 4 route stops that, so offer them only to
             // turn off, as the setup guide does (#722).
@@ -2478,7 +2509,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         // FCE head units show this card for their cluster's navigation view, which has its own opt-in.
         val bydNavigation = BydOutputSettings.available(this)
-        if (bydNavigation || BydOutputSettings.fceClusterAvailable()) filteredSection(content, SettingsSection.BYD_NAVIGATION,
+        if (!AionIntegration.enabled(this) && (bydNavigation || BydOutputSettings.fceClusterAvailable())) filteredSection(content, SettingsSection.BYD_NAVIGATION,
             getString(R.string.byd_navigation), R.drawable.ic_dp_navigation) { card ->
             toggle(card, getString(R.string.navigation_on_hud_and_instrument_cluster),
                 getString(R.string.show_phone_navigation_arrows_distance_and_street_names_on),
@@ -2497,6 +2528,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.PERMISSIONS_AND_HELP,
             getString(R.string.permissions_and_connection_help), R.drawable.ic_dp_permissions) { card ->
             card.addView(label(getString(R.string.nearby_devices_connects_your_iphone_microphone_enables_sir), 16, MUTED))
+            if (AionIntegration.enabled(this)) card.addView(button(getString(R.string.aion_permissions_open), false) {
+                startActivity(Intent(this, com.shilapi.xcertplay.aion.MainActivity::class.java))
+            }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
             card.addView(button(getString(R.string.app_permissions), false) { openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }, matchButton(16, 60))
             card.addView(button(getString(R.string.bluetooth_settings), false) { openBluetoothSettings() }, matchButton(10, 60))
             card.addView(button(getString(R.string.wireless_connection_help), false) { wirelessHelp() }, matchButton(10, 60))
@@ -2508,8 +2542,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsPageTitle(content, getString(R.string.about_diplay), getString(R.string.carplay_at_home_in_your_car))
         section(content, getString(R.string.about_public_preview_prefix, version())) { card ->
             card.addView(label(getString(R.string.an_independent_carplay_receiver_for_android_head_units_wir), 17, TEXT))
-            card.addView(updateRow())
-            toggle(card, getString(R.string.settings_background_update_checks),
+            if (!AionIntegration.enabled(this)) card.addView(updateRow())
+            if (!AionIntegration.enabled(this)) toggle(card, getString(R.string.settings_background_update_checks),
                 getString(R.string.settings_background_update_checks_description),
                 UpdateAvailability.backgroundChecksEnabled(this)) { UpdateAvailability.saveBackgroundChecksEnabled(this, it) }
         }
@@ -3281,6 +3315,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun openSetupGuide(fromSettings: Boolean) {
+        if (AionIntegration.enabled(this)) {
+            openConnectionSetupFromSettings()
+            return
+        }
         setupFromSettings = fromSettings
         setupStep = SetupGuide.STEP_CAR
         page = "setup"
@@ -3526,6 +3564,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val choices = if (wide) row().apply { gravity = Gravity.TOP } else column()
         parent.addView(choices)
         modes.forEachIndexed { index, candidate ->
+            if (AionIntegration.enabled(this) && candidate == WirelessHotspotMode.WIFI_P2P) return@forEachIndexed
             val option = column()
             choices.addView(option, if (wide) LinearLayout.LayoutParams(0, -2, 1f).apply {
                 if (index > 0) marginStart = dp(16)
@@ -4680,7 +4719,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         vehicleProbeOutcome = null
         pendingVehicleReplacement = null
         pendingVehicleLostFields = emptySet()
-        scheduleAutomaticVehicleValidation()
+        if (!AionIntegration.enabled(this)) scheduleAutomaticVehicleValidation()
         render()
         // With every vehicle-data switch off, the mode changes nothing CarPlay was told.
         if (vehicleDataSwitchesOn()) reconnectForVehicleSetting()
@@ -4823,7 +4862,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (!enabled) {
             reconnectForVehicleSetting()
         } else if (BydOutputSettings.legacyVehicleProbe(this)) {
-            scheduleAutomaticVehicleValidation()
+            if (!AionIntegration.enabled(this)) scheduleAutomaticVehicleValidation()
             reconnectForVehicleSetting()
         } else {
             // Default mode applies the switch once a check reads what the enabled switches need.
@@ -6265,7 +6304,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         icon: Int? = null,
         build: (LinearLayout) -> Unit,
     ) {
-        if (settingsSectionFilter?.contains(key) == false) return
+        if (settingsSectionFilter?.contains(key) == false || !AionIntegration.section(this, key)) return
         section(parent, title, icon, build)
     }
     // Routing changes affect the live cluster surface as soon as the host resumes.
