@@ -1,12 +1,12 @@
-# DiPlay
+# DiPlay AION
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
-**CarPlay for compatible BYD Android head units.** Wired and wireless, with the familiar DiAuto interface. Independent app: `com.shihab.diplay`.
+**A standalone CarPlay edition for AION Android 8.1 head units.** App: `com.shihab.diplay.aion`. This fork integrates Bluetooth startup, instrument music/map output and automatic music sample-rate negotiation without a companion app.
 
-> **BYD support scope:** These projects focus on BYD cars. They may work on other brands, but other brands are unsupported and there are no plans to add support or fix brand-specific incompatibilities.
+> **AION scope:** Validated on G6SA_r8a7796 with firmware GAC_A29_AVNT_02_31.59_220908_R. See the [AION release notes](docs/RELEASE-NOTES-0.2.22-AION.1.md) for installation, validation and firmware limits. The remaining sections describe upstream DiPlay; AION-specific requirements take precedence for this edition.
 
-[Download & website](https://shihabal3amri.github.io/DiPlay/) · [Release](https://github.com/shihabal3amri/DiPlay/releases/tag/v0.2.22) · [Report a problem](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
+[Download AION APK](https://github.com/FLORYHOBBIT/DiPlay/releases/tag/v0.2.22-aion.1) · [Report a problem](https://github.com/FLORYHOBBIT/DiPlay/issues) · [Upstream project](https://github.com/shihabal3amri/DiPlay)
 
 ![DiPlay home](site/assets/home.png)
 

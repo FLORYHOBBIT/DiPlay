@@ -191,10 +191,7 @@
                 android:resource="@xml/usb_auto_confirm_service_config" />
         </service>
 
-        <activity android:name="com.shilapi.xcertplay.aion.MainActivity" android:enabled="@bool/aion_edition" android:exported="false" />
         <activity android:name="com.shilapi.xcertplay.aion.BluetoothMediaActivity" android:enabled="@bool/aion_edition" android:exported="false" />
-        <activity android:name="com.shilapi.xcertplay.aion.MusicClusterActivity" android:enabled="@bool/aion_edition" android:exported="false" />
-        <activity android:name="com.shilapi.xcertplay.aion.InstrumentMapActivity" android:enabled="@bool/aion_edition" android:exported="false" />
         <service android:name="com.shilapi.xcertplay.aion.BluetoothPolicyService" android:enabled="@bool/aion_edition" android:exported="false" android:foregroundServiceType="connectedDevice" />
         <receiver android:name="com.shilapi.xcertplay.aion.AionBluetoothReceiver" android:enabled="@bool/aion_edition" android:exported="true">
             <intent-filter>

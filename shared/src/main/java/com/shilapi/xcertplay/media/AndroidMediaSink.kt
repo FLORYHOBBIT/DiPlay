@@ -200,6 +200,7 @@ class AndroidMediaSink(
     private val mediaBufferMillis: Int = MediaAudioBuffer.DEFAULT_MILLIS,
     /** Disable adaptive playback-rate changes on head units with unstable AudioTrack clocks. */
     private val mediaClockTrimEnabled: Boolean = true,
+    private val mediaPacketReorderEnabled: Boolean = false,
     private val onAudioDiagnostic: (String) -> Unit = {},
     /** True while any music ("media") audio stream is running; called from media threads. */
     private val onMediaAudioChanged: (Boolean) -> Unit = {},
@@ -757,6 +758,7 @@ class AndroidMediaSink(
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
         ).also {
+            it.enablePacketReordering(mediaPacketReorderEnabled)
             it.setNavigationAttenuationDb(navigationAttenuationDb)
             if (format.audioType == TELEPHONY_AUDIO_TYPE) it.onRoutedToEarpiece = { moveCallToLoudspeaker(id) }
             audioRenderers[id] = it
@@ -1781,6 +1783,14 @@ private class AudioRenderer(
 ) : Closeable {
     private data class AudioPacket(val rtp: ByteArray, val sample: Int, val arrivedNs: Long)
 
+    private var packetOrder: AudioPacketReorder<AudioPacket>? = null
+    fun enablePacketReordering(enabled: Boolean) {
+        check(!started)
+        if (enabled && format.audioType == "media") packetOrder = AudioPacketReorder { packet ->
+            ((packet.rtp[2].toInt() and 0xff) shl 8) or (packet.rtp[3].toInt() and 0xff)
+        }
+    }
+
     private val pcmChannels = if (format.channels >= 2) 2 else 1
     private val voiceFilter = if (voiceFilter && format.sampleRate > 0) VoiceFilter(format.sampleRate, pcmChannels) else null
 
@@ -1923,7 +1933,14 @@ private class AudioRenderer(
                 // Report Settings changes from this worker, never from the UI thread, also between prompts.
                 applyNavigationAttenuation()
                 diagnosticStage = "packet"
-                queue.poll(AUDIO_POLL_MILLIS, TimeUnit.MILLISECONDS)?.let(::handle)
+                val packet = queue.poll(AUDIO_POLL_MILLIS, TimeUnit.MILLISECONDS)
+                val order = packetOrder
+                if (order == null) packet?.let(::handle)
+                else {
+                    val now = System.nanoTime()
+                    val ready = if (packet != null) order.offer(packet, now) else order.drain(now)
+                    ready.forEach(::handle)
+                }
                 // Output becomes ready asynchronously, including after the last packet of a burst.
                 // Waiting for the next UDP packet can strand decoded sound for hundreds of ms.
                 diagnosticStage = "decoder-output"
@@ -2613,6 +2630,10 @@ private class AudioRenderer(
             "playbackRate=${clockTrim?.rate ?: -1} ended=$force"
         Log.i(STATS_TAG, line)
         report(line)
+        packetOrder?.let { order ->
+            report("Audio: packet order audioType=${format.audioType} pending=${order.size} " +
+                "heldTotal=${order.reordered} lateDroppedTotal=${order.lateDropped} missingTotal=${order.missing} resets=${order.resets}")
+        }
         if (format.codec != AudioCodecKind.LPCM) {
             // Keep this separate: the exported diagnostic recorder caps each line at 700 characters.
             val decoderLine = "Audio: decoder stats audioType=${format.audioType} codec=${format.codec} " +

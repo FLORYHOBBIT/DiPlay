@@ -1,12 +1,12 @@
-# DiPlay
+# DiPlay AION
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
-为兼容的比亚迪安卓车机提供有线及无线 CarPlay，采用 DiAuto 风格界面。
+面向埃安 Android 8.1 车机的独立 CarPlay 版本，包名为 `com.shihab.diplay.aion`。内置蓝牙自启动、仪表歌曲及地图同步、音乐采样率自动协商，无需另装车机助手转发。
 
-> 这些项目专注于比亚迪汽车。它们可能在其他品牌上运行，但其他品牌不在支持范围内，也没有增加支持或修复其品牌特定兼容性问题的计划。
+> 本分支已在 G6SA_r8a7796、固件 GAC_A29_AVNT_02_31.59_220908_R 上验证。[AION 发行说明](docs/RELEASE-NOTES-0.2.22-AION.1.md)记录安装方式、验证结果及固件限制。下文保留上游 DiPlay 的通用说明，本发行版以 AION 说明为准。
 
-[下载与中文网站](https://shihabal3amri.github.io/DiPlay/zh-Hans/) · [0.2.22 版本](https://github.com/shihabal3amri/DiPlay/releases/tag/v0.2.22) · [完整说明](README.md) · [报告问题](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
+[下载 AION 安装包](https://github.com/FLORYHOBBIT/DiPlay/releases/tag/v0.2.22-aion.1) · [完整说明](README.md) · [报告问题](https://github.com/FLORYHOBBIT/DiPlay/issues) · [上游项目](https://github.com/shihabal3amri/DiPlay)
 
 ## 0.2.22 — 公开预览版
 

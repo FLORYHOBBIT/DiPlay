@@ -7,9 +7,15 @@
     <item type="string" name="aion_bluetooth_open">@string/bluetooth_settings</item>
     <item type="string" name="aion_music">@string/audio</item>
     <item type="string" name="aion_music_description">@string/settings_audio_summary</item>
-    <item type="string" name="aion_music_open">@string/audio</item>
+    <item type="string" name="aion_music_toggle">@string/audio</item>
+    <item type="string" name="aion_music_now_playing">Now playing: %s</item>
+    <item type="string" name="aion_music_waiting">Waiting for DiPlay song information</item>
+    <item type="string" name="aion_music_stopped">Instrument song sync stopped</item>
     <item type="string" name="aion_map">@string/settings_navigation</item>
     <item type="string" name="aion_map_description">@string/settings_navigation_summary</item>
-    <item type="string" name="aion_map_open">@string/settings_navigation</item>
-    <item type="string" name="aion_permissions_open">@string/app_permissions</item>
+    <item type="string" name="aion_map_toggle">@string/settings_navigation</item>
+    <item type="string" name="aion_map_restore">@string/settings_navigation</item>
+    <item type="string" name="aion_map_resume">@string/settings_navigation</item>
+    <item type="string" name="aion_status_idle">Not enabled yet</item>
+    <item type="string" name="aion_status_unsupported">This car model or firmware does not match the recorded vehicle, so sync stays off.</item>
 </resources>

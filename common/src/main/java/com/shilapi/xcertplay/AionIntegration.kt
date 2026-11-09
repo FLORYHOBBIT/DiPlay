@@ -59,6 +59,11 @@ object AionIntegration {
         if (!enabled(context)) return
         com.shilapi.xcertplay.setup.SetupGuide.markSeen(context)
         val prefs = context.getSharedPreferences("aion-edition", Context.MODE_PRIVATE)
+        // This AION update restores the requested automatic car-hotspot startup once.
+        if (supported() && !prefs.getBoolean("hotspot_auto_restored_20261107", false)) {
+            com.shilapi.xcertplay.network.CarHotspotSettings.setEnabled(context, true)
+            prefs.edit().putBoolean("hotspot_auto_restored_20261107", true).apply()
+        }
         if (prefs.getBoolean("initialized", false)) return
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.MANUAL)
         AirPlayPersistence.saveWifiDirectScanPause(context, false)

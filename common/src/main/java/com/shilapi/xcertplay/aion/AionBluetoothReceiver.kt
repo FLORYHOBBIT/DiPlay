@@ -17,8 +17,10 @@ class AionBluetoothReceiver : BroadcastReceiver() {
                 @Suppress("DEPRECATION")
                 val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE) ?: return
                 val prefs = BluetoothPolicyService.preferences(context)
-                if (!prefs.getBoolean(BluetoothPolicyService.AUTO_DIPLAY, false) ||
-                    !device.address.equals(prefs.getString(BluetoothPolicyService.ADDRESS, null), ignoreCase = true)) return
+                if (!device.address.equals(prefs.getString(BluetoothPolicyService.ADDRESS, null), ignoreCase = true)) return
+                // Media policy must run even when CarPlay auto-start is off or this ACL is a duplicate.
+                resume(context)
+                if (!prefs.getBoolean(BluetoothPolicyService.AUTO_DIPLAY, false)) return
                 val now = SystemClock.elapsedRealtime()
                 // elapsedRealtime restarts at boot. A value saved on the previous drive must not
                 // suppress the first ACL event of this boot; deduplicate only in this process.
@@ -30,8 +32,6 @@ class AionBluetoothReceiver : BroadcastReceiver() {
                     prefs.edit().putLong("direct_start_elapsed", now)
                         .putString(BluetoothPolicyService.LAUNCH_STATUS, "蓝牙连接已直接请求启动 CarPlay，显示结果待核验").apply()
                 }
-                // Audio policy is independent: failure to close media cannot prevent startup.
-                resume(context)
             }
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             BluetoothAdapter.ACTION_STATE_CHANGED -> resume(context)

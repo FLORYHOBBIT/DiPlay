@@ -5,10 +5,16 @@
     <string name="aion_bluetooth_description" translatable="false">选择 iPhone，管理同步媒体和同步通话；手机蓝牙连接后自动启动 DiPlay。无需另装车机助手。</string>
     <string name="aion_bluetooth_open" translatable="false">蓝牙与自启动 · 设置</string>
     <string name="aion_music" translatable="false">埃安仪表歌曲（实验性）</string>
-    <string name="aion_music_description" translatable="false">将 DiPlay 的歌名、歌词和封面同步到原车仪表，使用当前 CarPlay 的歌曲数据。</string>
-    <string name="aion_music_open" translatable="false">仪表歌曲 · 设置</string>
+    <string name="aion_music_description" translatable="false">在仪表显示当前 CarPlay 的歌名、歌词、播放状态和封面。歌词取决于 iPhone 音乐应用是否提供；无需通知使用权，开启后立即生效。</string>
     <string name="aion_map" translatable="false">埃安仪表地图（实验性）</string>
-    <string name="aion_map_description" translatable="false">CarPlay 地图直接显示在仪表，地图流或连接结束后恢复原车画面。启用或停用后需重新连接 CarPlay。</string>
-    <string name="aion_map_open" translatable="false">仪表地图 · 设置</string>
-    <string name="aion_permissions_open" translatable="false">权限管理 · 系统授权与本机 ADB</string>
+    <string name="aion_map_description" translatable="false">在仪表显示 CarPlay 地图。地图流或连接结束后恢复原车画面。启用或停用后需重新连接 CarPlay，点击“立即重连”即可应用。</string>
+    <string name="aion_music_toggle" translatable="false">同步歌曲到仪表</string>
+    <string name="aion_music_now_playing" translatable="false">当前歌名：%s</string>
+    <string name="aion_music_waiting" translatable="false">等待 DiPlay 歌曲信息</string>
+    <string name="aion_music_stopped" translatable="false">已停用仪表歌曲同步</string>
+    <string name="aion_map_toggle" translatable="false">自动跟随 CarPlay 地图</string>
+    <string name="aion_map_restore" translatable="false">立即恢复原车地图</string>
+    <string name="aion_map_resume" translatable="false">恢复自动跟随</string>
+    <string name="aion_status_idle" translatable="false">尚未启用</string>
+    <string name="aion_status_unsupported" translatable="false">车型或固件与实车记录不匹配，未启用同步。</string>
 </resources>

@@ -17,8 +17,8 @@ android {
         applicationId = "com.shihab.diplay"
         minSdk = 27
         targetSdk = 37
-        versionCode = 4203
-        versionName = "0.2.22-aion"
+        versionCode = 4204
+        versionName = "0.2.22-aion.1"
         resourceConfigurations += listOf("zh-rCN")
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
 

@@ -66,6 +66,20 @@ class AionDirectOutputTest {
         assertNull("Duplicate ACL events must not launch twice", shadowOf(context).nextStartedActivity)
     }
 
+    @Test fun mediaPolicyStartsWhenCarPlayAutoStartIsOff() = edition {
+        val address = "00:11:22:33:44:55"
+        BluetoothPolicyService.preferences(context).edit().clear().putString(BluetoothPolicyService.ADDRESS, address)
+            .putBoolean(BluetoothPolicyService.AUTO_DIPLAY, false).putBoolean(BluetoothPolicyService.ENABLED, true).commit()
+        val device = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(address)
+        val receiver = AionBluetoothReceiver()
+        val intent = Intent(BluetoothDevice.ACTION_ACL_CONNECTED).putExtra(BluetoothDevice.EXTRA_DEVICE, device)
+        repeat(2) {
+            receiver.onReceive(context, intent)
+            assertEquals(BluetoothPolicyService::class.java.name, shadowOf(context).nextStartedService?.component?.className)
+            assertNull(shadowOf(context).nextStartedActivity)
+        }
+    }
+
     @Test fun anUnselectedPhoneCannotStartCarPlay() = edition {
         DiPlayPreferences.savePhone(context, "00:11:22:33:44:55", "iPhone")
         BluetoothPolicyService.preferences(context).edit().putString(BluetoothPolicyService.ADDRESS, "00:11:22:33:44:55")

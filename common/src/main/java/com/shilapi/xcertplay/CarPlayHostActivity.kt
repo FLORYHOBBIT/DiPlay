@@ -5153,6 +5153,15 @@ open class CarPlayHostActivity : ComponentActivity() {
         appendLog(effectiveSummary)
         val carBluetoothAudio = AirPlayPersistence.loadCarBluetoothAudio(this)
         if (carBluetoothAudio) logCarBluetoothAudio()
+        // Query STREAM_MUSIC, not PROPERTY_OUTPUT_SAMPLE_RATE: on some cars the primary
+        // low-latency output and the actual music mixer run at different rates.
+        val nativeMediaRate = runCatching {
+            android.media.AudioTrack.getNativeOutputSampleRate(android.media.AudioManager.STREAM_MUSIC)
+        }.onFailure { appendLog("Audio: native music rate query failed=${it.javaClass.simpleName}") }.getOrNull()
+        val mediaRates = com.shilapi.xcertplay.airplay.EntertainmentAudioCapabilities
+            .sampleRatesForNativeOutput(nativeMediaRate)
+        appendLog("Audio: automatic music rate native=$nativeMediaRate offered=${mediaRates.joinToString(",")} " +
+            "source=STREAM_MUSIC fallback=${nativeMediaRate !in mediaRates}")
         return AirPlayConfig(
             deviceName = "DiPlay",
             deviceId = DiPlayBootstrap.deviceId(airPlayIdentity),
@@ -5170,6 +5179,7 @@ open class CarPlayHostActivity : ComponentActivity() {
             icons = listOf(loadAirPlayIcon()),
             videoInCar = !AionIntegration.enabled(this) && com.shilapi.xcertplay.hud.BydOutputSettings.videoWhileParkedActive(this),
             mainBufferedAudio = AirPlayPersistence.loadMainBufferedAudio(this),
+            entertainmentSampleRates = mediaRates,
             speechWithout8And16Khz = AirPlayPersistence.loadSpeechWithout8And16Khz(this),
             callAtCallRate = AirPlayPersistence.loadCallAtCallRate(this),
             disableAudioOutput = carBluetoothAudio,
@@ -5382,6 +5392,7 @@ open class CarPlayHostActivity : ComponentActivity() {
             mediaBufferMillis = AirPlayPersistence.loadMediaBufferMillis(this, wireless = wirelessEnabled),
             // AION's Android 8.1 AudioTrack clock is firmware-owned; avoid audible pitch/speed shifts.
             mediaClockTrimEnabled = !AionIntegration.enabled(this),
+            mediaPacketReorderEnabled = AionIntegration.enabled(this),
             onAudioDiagnostic = { message ->
                 if (message.startsWith("Microphone: ")) {
                     AsyncDiagnosticLog.append(diagnosticLog, message)

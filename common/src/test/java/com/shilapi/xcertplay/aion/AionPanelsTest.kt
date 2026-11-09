@@ -7,7 +7,7 @@ import android.os.Build
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CheckBox
+import android.widget.Switch
 import android.widget.TextView
 import com.shilapi.xcertplay.AionIntegration
 import com.shilapi.xcertplay.AirPlayPersistence
@@ -40,15 +40,6 @@ class AionPanelsTest {
         assertTrue(AionIntegration.consumeReconnectNeeded(context))
     }
 
-    @Test fun unknownFirmwareCannotEnableVendorProjection() {
-        val activity = Robolectric.buildActivity(InstrumentMapActivity::class.java).setup().get()
-        try {
-            val toggle = views(activity.window.decorView).filterIsInstance<CheckBox>().single()
-            assertFalse(toggle.isEnabled)
-            assertFalse(AionMapSettings.prefs(activity).getBoolean(AionMapSettings.AUTO_ENABLED, false))
-        } finally { activity.finish() }
-    }
-
     @Test fun instrumentRequiresExactCarFirmware() {
         ReflectionHelpers.setStaticField(Build::class.java, "MODEL", "G6SA-r8a7796")
         ReflectionHelpers.setStaticField(Build::class.java, "DISPLAY", "GAC_A29_AVNT_02_31.59_220908_R")
@@ -57,34 +48,13 @@ class AionPanelsTest {
         assertFalse(AionIntegration.supported())
     }
 
-    @Test @Config(sdk = [35]) fun compactLargeFontScreenshot() = capture("compact-zh")
-    @Test @Config(sdk = [35], qualifiers = "zh-rCN-w1280dp-h720dp-xhdpi")
-    fun fullLargeFontScreenshot() = capture("full-zh")
-    @Test @Config(sdk = [35], qualifiers = "ar-ldrtl-w360dp-h720dp-xhdpi")
-    fun arabicSystemLargeFontScreenshot() = capture("compact-ar-system")
-
     @Test @Config(sdk = [35])
     fun compactBluetoothScreenshot() = capture("bluetooth-compact", BluetoothMediaActivity::class.java)
 
     @Test @Config(sdk = [35], qualifiers = "zh-rCN-w1280dp-h720dp-xhdpi")
     fun fullBluetoothScreenshot() = capture("bluetooth-full", BluetoothMediaActivity::class.java)
 
-    @Test @Config(sdk = [35])
-    fun permissionsIncludeTheAppItselfAndFitCompactWindows() {
-        Mockito.mockStatic(AionIntegration::class.java, Answer { invocation ->
-            if (invocation.method.name == "supported") true else invocation.callRealMethod()
-        }).use {
-            val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
-            try {
-                val activity = controller.get()
-                val selected = ReflectionHelpers.getField<Any>(activity, "selected")
-                assertEquals(activity.packageName, ReflectionHelpers.getField<String>(selected, "pkg"))
-            } finally { controller.pause().stop().destroy() }
-            capturePanel("permissions-compact", MainActivity::class.java)
-        }
-    }
-
-    private fun capture(name: String, type: Class<out Activity> = InstrumentMapActivity::class.java) {
+    private fun capture(name: String, type: Class<out Activity>) {
         Mockito.mockStatic(AionIntegration::class.java, Answer { invocation ->
             if (invocation.method.name == "supported") true else invocation.callRealMethod()
         }).use { capturePanel(name, type) }

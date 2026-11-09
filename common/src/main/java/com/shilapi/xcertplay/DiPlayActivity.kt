@@ -1741,15 +1741,42 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
             }
             filteredSection(content, SettingsSection.AION_MUSIC, getString(R.string.aion_music)) { card ->
-                card.addView(label(getString(R.string.aion_music_description), 16, MUTED))
-                card.addView(button(getString(R.string.aion_music_open), false) {
-                    startActivity(Intent(this, com.shilapi.xcertplay.aion.MusicClusterActivity::class.java))
-                }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
+                val music = com.shilapi.xcertplay.aion.AionInstrumentMusic.prefs(this)
+                fun musicStatus() = (if (AionIntegration.supported()) "" else getString(R.string.aion_status_unsupported) + "\n") +
+                    music.getString(com.shilapi.xcertplay.aion.AionInstrumentMusic.STATUS, getString(R.string.aion_status_idle)) +
+                    "\n" + getString(R.string.aion_music_now_playing, music.getString("title", "—"))
+                val status = label(musicStatus(), 16, MUTED)
+                toggle(card, getString(R.string.aion_music_toggle), getString(R.string.aion_music_description),
+                    music.getBoolean(com.shilapi.xcertplay.aion.AionInstrumentMusic.ENABLED, false), AionIntegration.supported()) {
+                    music.edit()
+                        .putBoolean(com.shilapi.xcertplay.aion.AionInstrumentMusic.ENABLED, it)
+                        .putString(com.shilapi.xcertplay.aion.AionInstrumentMusic.STATUS,
+                            if (it) getString(R.string.aion_music_waiting) else getString(R.string.aion_music_stopped))
+                        .commit()
+                    com.shilapi.xcertplay.aion.AionInstrumentMusic.changed(this, it)
+                    status.text = musicStatus()
+                }
+                card.addView(status)
             }
             filteredSection(content, SettingsSection.AION_MAP, getString(R.string.aion_map)) { card ->
-                card.addView(label(getString(R.string.aion_map_description), 16, MUTED))
-                card.addView(button(getString(R.string.aion_map_open), false) {
-                    startActivity(Intent(this, com.shilapi.xcertplay.aion.InstrumentMapActivity::class.java))
+                val map = com.shilapi.xcertplay.aion.AionMapSettings.prefs(this)
+                val supported = AionIntegration.supported()
+                fun mapStatus() = (if (supported) "" else getString(R.string.aion_status_unsupported) + "\n") +
+                    map.getString("status", getString(R.string.aion_status_idle))
+                val status = label(mapStatus(), 16, MUTED)
+                toggle(card, getString(R.string.aion_map_toggle), getString(R.string.aion_map_description),
+                    map.getBoolean(com.shilapi.xcertplay.aion.AionMapSettings.AUTO_ENABLED, false), supported) {
+                    com.shilapi.xcertplay.aion.AionMapSettings.setEnabled(this, it)
+                    markReconnectNeeded()
+                    status.text = mapStatus()
+                }
+                card.addView(status)
+                card.addView(button(getString(R.string.aion_map_restore), false) {
+                    if (supported) com.shilapi.xcertplay.aion.AionMapSettings.pause(this, true)
+                }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
+                card.addView(button(getString(R.string.aion_map_resume), false) {
+                    if (supported && map.getBoolean(com.shilapi.xcertplay.aion.AionMapSettings.AUTO_ENABLED, false))
+                        com.shilapi.xcertplay.aion.AionMapSettings.pause(this, false)
                 }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
             }
         }
@@ -1818,6 +1845,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     bluetoothAutoConnectPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
                 } else if (enabled && DiPlayPreferences.phoneAddress(this) == null) choosePhone()
             }
+            if (AionIntegration.enabled(this)) systemHotspotControls(card)
             val connectionModes = DefaultConnectionMode.entries
             choice(card, getString(R.string.default_connection_mode), listOf(
                 getString(R.string.default_connection_last_used),
@@ -2138,6 +2166,15 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 setPadding(0, dp(SETTINGS_BLOCK_GAP_DP), 0, 0)
             })
             musicBufferChoice(card, wireless = true)
+            // The AION edition hides the Advanced category, so the buffered music toggle lives here
+            // instead of Advanced media, next to the music buffers it complements.
+            if (AionIntegration.enabled(this)) {
+                toggle(card, getString(R.string.main_buffered_audio), getString(R.string.main_buffered_audio_description),
+                    AirPlayPersistence.loadMainBufferedAudio(this)) {
+                    AirPlayPersistence.saveMainBufferedAudio(this, it)
+                    reconnectIfRunning()
+                }
+            }
             musicBufferChoice(card, wireless = false)
             toggle(card, getString(R.string.settings_call_speakerphone), getString(R.string.settings_call_speakerphone_description),
                 AirPlayPersistence.loadCallSpeakerphone(this)) { AirPlayPersistence.saveCallSpeakerphone(this, it) }
@@ -2528,9 +2565,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         filteredSection(content, SettingsSection.PERMISSIONS_AND_HELP,
             getString(R.string.permissions_and_connection_help), R.drawable.ic_dp_permissions) { card ->
             card.addView(label(getString(R.string.nearby_devices_connects_your_iphone_microphone_enables_sir), 16, MUTED))
-            if (AionIntegration.enabled(this)) card.addView(button(getString(R.string.aion_permissions_open), false) {
-                startActivity(Intent(this, com.shilapi.xcertplay.aion.MainActivity::class.java))
-            }, matchButton(SETTINGS_BLOCK_GAP_DP, 60))
             card.addView(button(getString(R.string.app_permissions), false) { openSystem(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }, matchButton(16, 60))
             card.addView(button(getString(R.string.bluetooth_settings), false) { openBluetoothSettings() }, matchButton(10, 60))
             card.addView(button(getString(R.string.wireless_connection_help), false) { wirelessHelp() }, matchButton(10, 60))
@@ -2872,6 +2906,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
      */
     private fun systemHotspotSettings(parent: LinearLayout) {
         section(parent, getString(R.string.settings_car_hotspot_control), R.drawable.ic_dp_permissions) { card ->
+            systemHotspotControls(card)
+        }
+    }
+
+    private fun systemHotspotControls(card: LinearLayout) {
             toggle(card, getString(R.string.auto_car_hotspot_title),
                 getString(R.string.settings_auto_car_hotspot_system_description), CarHotspotSettings.enabled(this)) { enabled ->
                 CarHotspotSettings.setEnabled(this, enabled)
@@ -2887,7 +2926,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 card.addView(button(getString(R.string.settings_write_settings_allow), false) { openWriteSettingsAccess() },
                     matchButton(8, 54))
             }
-        }
     }
 
     private fun openWriteSettingsAccess() =
@@ -3564,7 +3602,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         val choices = if (wide) row().apply { gravity = Gravity.TOP } else column()
         parent.addView(choices)
         modes.forEachIndexed { index, candidate ->
-            if (AionIntegration.enabled(this) && candidate == WirelessHotspotMode.WIFI_P2P) return@forEachIndexed
             val option = column()
             choices.addView(option, if (wide) LinearLayout.LayoutParams(0, -2, 1f).apply {
                 if (index > 0) marginStart = dp(16)
